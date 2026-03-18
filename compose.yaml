@@ -1,0 +1,23 @@
+services:
+    postgres:
+        container_name: snowflake_db
+        image: postgres:18.3-alpine
+        environment:
+          POSTGRES_DB: snowflake_db
+          POSTGRES_USER: meow
+          POSTGRES_PASSWORD: UwU
+        ports:
+          - "5432:5432"
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
+          - ./source_data:/docker-entrypoint-initdb.d
+        networks:
+          - meowork
+
+
+networks:
+    meowork:
+        driver: bridge
+
+volumes:
+    postgres_data:

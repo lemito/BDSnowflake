@@ -34,20 +34,11 @@ SELECT DISTINCT
     val
 FROM
     (
-        SELECT
-            customer_country AS val
-        FROM
-            mock_data
+        SELECT customer_country AS val FROM mock_data
         UNION
-        SELECT
-            store_country
-        FROM
-            mock_data
+        SELECT store_country FROM mock_data
         UNION
-        SELECT
-            supplier_country
-        FROM
-            mock_data
+        SELECT supplier_country FROM mock_data
     ) t
 WHERE
     val IS NOT NULL ON CONFLICT DO NOTHING;
@@ -100,6 +91,51 @@ FROM
     snowflake.dim_states ON CONFLICT DO NOTHING;
 
 INSERT INTO
+    snowflake.dim_colors (name)
+SELECT DISTINCT
+    product_color
+FROM
+    mock_data
+WHERE
+    product_color IS NOT NULL ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    snowflake.dim_brands (name)
+SELECT DISTINCT
+    product_brand
+FROM
+    mock_data
+WHERE
+    product_brand IS NOT NULL ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    snowflake.dim_materials (name)
+SELECT DISTINCT
+    product_material
+FROM
+    mock_data
+WHERE
+    product_material IS NOT NULL ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    snowflake.dim_product_categories (name)
+SELECT DISTINCT
+    product_category
+FROM
+    mock_data
+WHERE
+    product_category IS NOT NULL ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    snowflake.dim_pet_categories (name)
+SELECT DISTINCT
+    pet_category
+FROM
+    mock_data
+WHERE
+    pet_category IS NOT NULL ON CONFLICT DO NOTHING;
+
+INSERT INTO
     snowflake.dim_suppliers (name, contact, email, phone, address, city_id)
 SELECT DISTINCT
     m.supplier_name,
@@ -114,6 +150,24 @@ FROM
     JOIN snowflake.dim_states st ON st.country_id = co.country_id
     JOIN snowflake.dim_cities ci ON ci.name = m.supplier_city
     AND ci.state_id = st.state_id ON CONFLICT DO NOTHING;
+
+INSERT INTO
+    snowflake.dim_stores (name, location, city_id, phone, email)
+SELECT DISTINCT
+    m.store_name,
+    m.store_location,
+    ci.city_id,
+    m.store_phone,
+    m.store_email
+FROM
+    mock_data m
+    JOIN snowflake.dim_countries co ON co.name = m.store_country
+    JOIN snowflake.dim_states st ON st.name = m.store_state
+    AND st.country_id = co.country_id
+    JOIN snowflake.dim_cities ci ON ci.name = m.store_city
+    AND ci.state_id = st.state_id
+WHERE
+    m.store_email IS NOT NULL ON CONFLICT DO NOTHING;
 
 INSERT INTO
     snowflake.dim_customers (
@@ -160,14 +214,9 @@ SELECT DISTINCT
     m.seller_last_name,
     m.seller_email,
     (
-        SELECT
-            city_id
-        FROM
-            snowflake.dim_cities
-        WHERE
-            name = 'Unknown City'
-        LIMIT
-            1
+        SELECT city_id FROM snowflake.dim_cities
+        WHERE name = 'Unknown City'
+        LIMIT 1
     ),
     m.seller_postal_code
 FROM
@@ -179,65 +228,44 @@ INSERT INTO
     snowflake.dim_products (
         product_id,
         name,
+        category_id,
+        pet_category_id,
         price,
         weight,
         color_id,
         size,
         brand_id,
         material_id,
+        description,
+        rating,
+        reviews,
         release_date,
+        expiry_date,
         supplier_id
     )
 SELECT DISTINCT
     m.sale_product_id + FLOOR((m.id - 1) / 1000) * 1000,
     m.product_name,
+    (SELECT category_id FROM snowflake.dim_product_categories WHERE name = m.product_category LIMIT 1),
+    (SELECT pet_category_id FROM snowflake.dim_pet_categories WHERE name = m.pet_category LIMIT 1),
     m.product_price,
     m.product_weight,
-    (
-        SELECT
-            color_id
-        FROM
-            snowflake.dim_colors
-        WHERE
-            name = m.product_color
-        LIMIT
-            1
-    ),
+    (SELECT color_id FROM snowflake.dim_colors WHERE name = m.product_color LIMIT 1),
     m.product_size,
-    (
-        SELECT
-            brand_id
-        FROM
-            snowflake.dim_brands
-        WHERE
-            name = m.product_brand
-        LIMIT
-            1
-    ),
-    (
-        SELECT
-            material_id
-        FROM
-            snowflake.dim_materials
-        WHERE
-            name = m.product_material
-        LIMIT
-            1
-    ),
+    (SELECT brand_id FROM snowflake.dim_brands WHERE name = m.product_brand LIMIT 1),
+    (SELECT material_id FROM snowflake.dim_materials WHERE name = m.product_material LIMIT 1),
+    m.product_description,
+    m.product_rating,
+    m.product_reviews,
     CASE
-        WHEN m.product_release_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN to_date (m.product_release_date, 'FMMM/FMDD/YYYY')
+        WHEN m.product_release_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN to_date(m.product_release_date, 'FMMM/FMDD/YYYY')
         ELSE NULL
     END,
-    (
-        SELECT
-            supplier_id
-        FROM
-            snowflake.dim_suppliers
-        WHERE
-            email = m.supplier_email
-        LIMIT
-            1
-    )
+    CASE
+        WHEN m.product_expiry_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN to_date(m.product_expiry_date, 'FMMM/FMDD/YYYY')
+        ELSE NULL
+    END,
+    (SELECT supplier_id FROM snowflake.dim_suppliers WHERE email = m.supplier_email LIMIT 1)
 FROM
     mock_data m
 WHERE
@@ -261,7 +289,7 @@ SELECT
     m.sale_quantity,
     m.sale_total_price,
     CASE
-        WHEN m.sale_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN to_date (m.sale_date, 'FMMM/FMDD/YYYY')
+        WHEN m.sale_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN to_date(m.sale_date, 'FMMM/FMDD/YYYY')
         ELSE NULL
     END
 FROM
